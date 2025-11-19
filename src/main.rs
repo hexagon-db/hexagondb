@@ -1,6 +1,4 @@
-use hexagondb::parse_query;
-
+use hexagondb::database;
 fn main() {
-    let query = String::from("SET name 'Hexagon DB!'");
-    println!("{:?}",parse_query::parse_query(query));
+
 }
