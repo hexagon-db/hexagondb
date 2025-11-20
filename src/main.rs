@@ -5,7 +5,7 @@ fn main() -> std::io::Result<()>  {
     let mut db: DB = DB::new();
     let mut client:interpreter::Interpreter = interpreter::Interpreter::new(db);
 
-    let listener = TcpListener::bind("127.0.0.1:6379")?;
+    let listener = TcpListener::bind("127.0.0.1:2112")?;
     
     for stream in listener.incoming() {
         match stream {
