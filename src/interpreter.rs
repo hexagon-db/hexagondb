@@ -4,13 +4,13 @@ pub struct Interpreter {
     db: DB
 }
 impl Interpreter {
-    pub fn new() -> Self {
+    pub fn new(db: DB) -> Self {
         Interpreter {
-            db: DB::new(),
+            db: db,
         }
     }
 
-    pub fn exec(&mut self, query: &str) -> String {
+    pub fn exec(&mut self, query: String) -> String {
         let tokens: Vec<String> = parse_query::parse_query(query.to_string());
 
         if let Some(cmd) = tokens.get(0).cloned() {
