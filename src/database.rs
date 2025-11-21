@@ -424,3 +424,88 @@ impl DB {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::thread;
+
+    #[test]
+    fn test_string_ops() {
+        let mut db = DB::new();
+        db.set("key".to_string(), "value".to_string());
+        assert_eq!(db.get("key".to_string()).unwrap(), Some("value".to_string()));
+        
+        db.del("key".to_string());
+        assert_eq!(db.get("key".to_string()).unwrap(), None);
+    }
+
+    #[test]
+    fn test_incr_decr() {
+        let mut db = DB::new();
+        db.set("counter".to_string(), "10".to_string());
+        
+        assert_eq!(db.incr("counter".to_string()).unwrap(), 11);
+        assert_eq!(db.get("counter".to_string()).unwrap(), Some("11".to_string()));
+        
+        assert_eq!(db.decr("counter".to_string()).unwrap(), 10);
+        assert_eq!(db.get("counter".to_string()).unwrap(), Some("10".to_string()));
+        
+        // Test new key
+        assert_eq!(db.incr("new_counter".to_string()).unwrap(), 1);
+    }
+
+    #[test]
+    fn test_expiration() {
+        let mut db = DB::new();
+        db.set("temp".to_string(), "val".to_string());
+        db.expire("temp".to_string(), 1);
+        
+        assert!(db.exists("temp".to_string()));
+        
+        // Sleep for 1.1 seconds
+        thread::sleep(Duration::from_millis(1100));
+        
+        assert!(!db.exists("temp".to_string()));
+        assert_eq!(db.get("temp".to_string()).unwrap(), None);
+    }
+
+    #[test]
+    fn test_list_ops() {
+        let mut db = DB::new();
+        db.lpush("mylist".to_string(), vec!["c".to_string(), "b".to_string(), "a".to_string()]);
+        // Result should be a, b, c (since we push c, then b, then a to front? No, lpush takes vec)
+        // lpush key v1 v2 v3 -> pushes v1, then v2, then v3 to the left.
+        // So list becomes [v3, v2, v1]
+        // Wait, my implementation:
+        // for v in values { list.insert(0, v); }
+        // If values is [c, b, a]
+        // insert c at 0 -> [c]
+        // insert b at 0 -> [b, c]
+        // insert a at 0 -> [a, b, c]
+        // So order is reversed from input vector if I iterate and insert at 0.
+        
+        assert_eq!(db.llen("mylist".to_string()).unwrap(), 3);
+        
+        let range = db.lrange("mylist".to_string(), 0, -1).unwrap();
+        assert_eq!(range, vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+        
+        assert_eq!(db.lpop("mylist".to_string()).unwrap(), Some("a".to_string()));
+        assert_eq!(db.rpop("mylist".to_string()).unwrap(), Some("c".to_string()));
+        assert_eq!(db.llen("mylist".to_string()).unwrap(), 1);
+    }
+
+    #[test]
+    fn test_hash_ops() {
+        let mut db = DB::new();
+        db.hset("myhash".to_string(), "field1".to_string(), "val1".to_string()).unwrap();
+        db.hset("myhash".to_string(), "field2".to_string(), "val2".to_string()).unwrap();
+        
+        assert_eq!(db.hget("myhash".to_string(), "field1".to_string()).unwrap(), Some("val1".to_string()));
+        assert_eq!(db.hget("myhash".to_string(), "field2".to_string()).unwrap(), Some("val2".to_string()));
+        assert_eq!(db.hget("myhash".to_string(), "field3".to_string()).unwrap(), None);
+        
+        db.hdel("myhash".to_string(), "field1".to_string()).unwrap();
+        assert_eq!(db.hget("myhash".to_string(), "field1".to_string()).unwrap(), None);
+    }
+}

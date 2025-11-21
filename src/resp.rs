@@ -146,3 +146,80 @@ impl RespHandler {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_serialize_simple_string() {
+        let val = RespValue::SimpleString("OK".to_string());
+        assert_eq!(val.serialize(), "+OK\r\n");
+    }
+
+    #[test]
+    fn test_serialize_error() {
+        let val = RespValue::Error("Error message".to_string());
+        assert_eq!(val.serialize(), "-Error message\r\n");
+    }
+
+    #[test]
+    fn test_serialize_integer() {
+        let val = RespValue::Integer(1000);
+        assert_eq!(val.serialize(), ":1000\r\n");
+    }
+
+    #[test]
+    fn test_serialize_bulk_string() {
+        let val = RespValue::BulkString(Some("hello".to_string()));
+        assert_eq!(val.serialize(), "$5\r\nhello\r\n");
+        
+        let null_val = RespValue::BulkString(None);
+        assert_eq!(null_val.serialize(), "$-1\r\n");
+    }
+
+    #[test]
+    fn test_serialize_array() {
+        let val = RespValue::Array(Some(vec![
+            RespValue::BulkString(Some("hello".to_string())),
+            RespValue::BulkString(Some("world".to_string()))
+        ]));
+        assert_eq!(val.serialize(), "*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n");
+        
+        let null_arr = RespValue::Array(None);
+        assert_eq!(null_arr.serialize(), "*-1\r\n");
+    }
+
+    #[test]
+    fn test_parse_array() {
+        let data = b"*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n";
+        let (val, len) = RespHandler::parse_request(data).unwrap().unwrap();
+        
+        assert_eq!(len, data.len());
+        match val {
+            RespValue::Array(Some(items)) => {
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0], RespValue::BulkString(Some("hello".to_string())));
+                assert_eq!(items[1], RespValue::BulkString(Some("world".to_string())));
+            },
+            _ => panic!("Expected Array"),
+        }
+    }
+    
+    #[test]
+    fn test_parse_inline() {
+        let data = b"SET key value\r\n";
+        let (val, len) = RespHandler::parse_request(data).unwrap().unwrap();
+        
+        assert_eq!(len, data.len());
+        match val {
+            RespValue::Array(Some(items)) => {
+                assert_eq!(items.len(), 3);
+                assert_eq!(items[0], RespValue::BulkString(Some("SET".to_string())));
+                assert_eq!(items[1], RespValue::BulkString(Some("key".to_string())));
+                assert_eq!(items[2], RespValue::BulkString(Some("value".to_string())));
+            },
+            _ => panic!("Expected Array"),
+        }
+    }
+}
