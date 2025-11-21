@@ -99,6 +99,19 @@ impl Aof {
                             }
                         } else if cmd == "PERSIST" && args.len() >= 2 {
                             db_guard.persist(args[1].clone());
+                        } else if (cmd == "LPUSH" || cmd == "RPUSH") && args.len() >= 3 {
+                            let values = args[2..].to_vec();
+                            if cmd == "LPUSH" {
+                                let _ = db_guard.lpush_safe(args[1].clone(), values);
+                            } else {
+                                let _ = db_guard.rpush(args[1].clone(), values);
+                            }
+                        } else if (cmd == "LPOP" || cmd == "RPOP") && args.len() >= 2 {
+                            if cmd == "LPOP" {
+                                let _ = db_guard.lpop(args[1].clone());
+                            } else {
+                                let _ = db_guard.rpop(args[1].clone());
+                            }
                         }
                         // Note: We don't replay read commands like GET, KEYS, etc.
                         

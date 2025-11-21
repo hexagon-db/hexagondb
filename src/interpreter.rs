@@ -46,8 +46,9 @@ impl Interpreter {
                 if cmd_upper == "GET" {
                     let mut db = self.db.lock();
                     return match db.get(item) {
-                        Some(value) => RespValue::BulkString(Some(value)),
-                        None => RespValue::BulkString(None),
+                        Ok(Some(value)) => RespValue::BulkString(Some(value)),
+                        Ok(None) => RespValue::BulkString(None),
+                        Err(e) => RespValue::Error(e),
                     };
                 } else if cmd_upper == "SET" {
                     if let Some(value) = tokens.get(2).cloned() {
@@ -104,6 +105,78 @@ impl Interpreter {
                             return RespValue::Integer(val);
                         },
                         Err(e) => return RespValue::Error(e),
+                    }
+                } else if cmd_upper == "LPUSH" || cmd_upper == "RPUSH" {
+                    if tokens.len() < 3 {
+                        return RespValue::Error(format!("wrong number of arguments for '{}' command", cmd_upper));
+                    }
+                    let values = tokens[2..].to_vec();
+                    let mut db = self.db.lock();
+                    
+                    let result = if cmd_upper == "LPUSH" {
+                        db.lpush_safe(item, values)
+                    } else {
+                        db.rpush(item, values)
+                    };
+
+                    match result {
+                        Ok(len) => {
+                            // Persist to AOF
+                            let mut aof = self.aof.lock();
+                            if let Err(e) = aof.append(tokens.clone()) {
+                                error!("Failed to append to AOF: {}", e);
+                            }
+                            return RespValue::Integer(len as i64);
+                        },
+                        Err(e) => return RespValue::Error(e),
+                    }
+                } else if cmd_upper == "LPOP" || cmd_upper == "RPOP" {
+                    let mut db = self.db.lock();
+                    let result = if cmd_upper == "LPOP" {
+                        db.lpop(item)
+                    } else {
+                        db.rpop(item)
+                    };
+
+                    match result {
+                        Ok(Some(val)) => {
+                            // Persist to AOF
+                            let mut aof = self.aof.lock();
+                            if let Err(e) = aof.append(tokens.clone()) {
+                                error!("Failed to append to AOF: {}", e);
+                            }
+                            return RespValue::BulkString(Some(val));
+                        },
+                        Ok(None) => return RespValue::BulkString(None),
+                        Err(e) => return RespValue::Error(e),
+                    }
+                } else if cmd_upper == "LLEN" {
+                    let mut db = self.db.lock();
+                    match db.llen(item) {
+                        Ok(len) => return RespValue::Integer(len as i64),
+                        Err(e) => return RespValue::Error(e),
+                    }
+                } else if cmd_upper == "LRANGE" {
+                    if tokens.len() != 4 {
+                        return RespValue::Error("wrong number of arguments for 'LRANGE' command".to_string());
+                    }
+                    let start_str = &tokens[2];
+                    let stop_str = &tokens[3];
+                    
+                    match (start_str.parse::<i64>(), stop_str.parse::<i64>()) {
+                        (Ok(start), Ok(stop)) => {
+                            let mut db = self.db.lock();
+                            match db.lrange(item, start, stop) {
+                                Ok(values) => {
+                                    let resp_values: Vec<RespValue> = values.into_iter()
+                                        .map(|s| RespValue::BulkString(Some(s)))
+                                        .collect();
+                                    return RespValue::Array(Some(resp_values));
+                                },
+                                Err(e) => return RespValue::Error(e),
+                            }
+                        },
+                        _ => return RespValue::Error("value is not an integer or out of range".to_string()),
                     }
                 } else if cmd_upper == "EXPIRE" {
                     if let Some(seconds_str) = tokens.get(2).cloned() {
