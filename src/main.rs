@@ -2,7 +2,7 @@ use std::net::TcpListener;
 
 use hexagondb::{database::DB, interpreter,connection};
 fn main() -> std::io::Result<()>  {
-    let mut db: DB = DB::new();
+    let db: DB = DB::new();
     let mut client:interpreter::Interpreter = interpreter::Interpreter::new(db);
 
     let listener = TcpListener::bind("127.0.0.1:2112")?;
