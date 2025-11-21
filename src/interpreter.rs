@@ -52,6 +52,18 @@ impl Interpreter {
                     let db = self.db.lock();
                     let exists = db.exists(item);
                     return if exists { String::from(":1") } else { String::from(":0") };
+                } else if cmd.to_uppercase() == "INCR" {
+                    let mut db = self.db.lock();
+                    match db.incr(item) {
+                        Ok(val) => return format!(":{}", val),
+                        Err(e) => return format!("-ERR {}", e),
+                    }
+                } else if cmd.to_uppercase() == "DECR" {
+                    let mut db = self.db.lock();
+                    match db.decr(item) {
+                        Ok(val) => return format!(":{}", val),
+                        Err(e) => return format!("-ERR {}", e),
+                    }
                 }
             }
         }

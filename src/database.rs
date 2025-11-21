@@ -47,4 +47,34 @@ impl DB {
             }
         }
     }
+
+    pub fn incr(&mut self, key: String) -> Result<i64, String> {
+        let current = self.items.get(&key)
+            .map(|v| v.as_str())
+            .unwrap_or("0");
+        
+        match current.parse::<i64>() {
+            Ok(num) => {
+                let new_val = num + 1;
+                self.items.insert(key, new_val.to_string());
+                Ok(new_val)
+            }
+            Err(_) => Err(String::from("value is not an integer or out of range"))
+        }
+    }
+
+    pub fn decr(&mut self, key: String) -> Result<i64, String> {
+        let current = self.items.get(&key)
+            .map(|v| v.as_str())
+            .unwrap_or("0");
+        
+        match current.parse::<i64>() {
+            Ok(num) => {
+                let new_val = num - 1;
+                self.items.insert(key, new_val.to_string());
+                Ok(new_val)
+            }
+            Err(_) => Err(String::from("value is not an integer or out of range"))
+        }
+    }
 }
