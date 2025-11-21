@@ -40,7 +40,7 @@ impl Interpreter {
             
             if let Some(item) = tokens.get(1).cloned() {
                 if cmd.to_uppercase() == "GET" {
-                    let db = self.db.lock();
+                    let mut db = self.db.lock();
                     return match db.get(item) {
                         Some(value) => RespValue::BulkString(Some(value)),
                         None => RespValue::BulkString(None),
@@ -73,6 +73,26 @@ impl Interpreter {
                         Ok(val) => return RespValue::Integer(val),
                         Err(e) => return RespValue::Error(e),
                     }
+                } else if cmd.to_uppercase() == "EXPIRE" {
+                    if let Some(seconds_str) = tokens.get(2).cloned() {
+                        if let Ok(seconds) = seconds_str.parse::<u64>() {
+                            let mut db = self.db.lock();
+                            let result = db.expire(item, seconds);
+                            return RespValue::Integer(if result { 1 } else { 0 });
+                        } else {
+                            return RespValue::Error("value is not an integer or out of range".to_string());
+                        }
+                    } else {
+                        return RespValue::Error("wrong number of arguments for 'EXPIRE' command".to_string());
+                    }
+                } else if cmd.to_uppercase() == "TTL" {
+                    let mut db = self.db.lock();
+                    let ttl = db.ttl(item);
+                    return RespValue::Integer(ttl);
+                } else if cmd.to_uppercase() == "PERSIST" {
+                    let mut db = self.db.lock();
+                    let result = db.persist(item);
+                    return RespValue::Integer(if result { 1 } else { 0 });
                 }
             }
         }
