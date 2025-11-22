@@ -1,38 +1,46 @@
+use hexagondb::aof::Aof;
+use hexagondb::connection;
+use hexagondb::database::DB;
+use hexagondb::interpreter;
+use parking_lot::Mutex;
 use std::net::TcpListener;
 use std::sync::Arc;
 use std::thread;
-use parking_lot::Mutex;
-use tracing::{info, error};
+use tracing::{error, info};
 use tracing_subscriber;
 
-use hexagondb::{database::DB, interpreter, connection, aof::Aof};
-
-fn main() -> std::io::Result<()>  {
+fn main() -> std::io::Result<()> {
     // Initialize logging
     tracing_subscriber::fmt()
         .with_target(false)
         .compact()
         .init();
-    
-    let db: DB = DB::new();
-    let db = Arc::new(Mutex::new(db));
 
-    // Initialize AOF
-    let aof = Aof::new("database.aof")?;
-    if let Err(e) = Aof::load("database.aof", &db) {
-        error!("Failed to load AOF: {}", e);
-    }
+    info!("Initializing HexagonDB...");
+
+    let db = Arc::new(Mutex::new(DB::new()));
+
+    let aof = Aof::new("database.aof").unwrap_or_else(|e| {
+        error!("Failed to create AOF: {}", e);
+        std::process::exit(1);
+    });
+    Aof::load("database.aof", &db).ok();
     let aof = Arc::new(Mutex::new(aof));
-    
-    let listener = TcpListener::bind("127.0.0.1:2112")?;
-    info!("HexagonDB server listening on 127.0.0.1:2112");
-    
+
+    // Bind to Redis-compatible port (6379)
+    let addr = "127.0.0.1:6379";
+    let listener = TcpListener::bind(addr)?;
+    info!(
+        "HexagonDB server listening on {} (Redis-compatible port)",
+        addr
+    );
+
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 let db_clone = Arc::clone(&db);
                 let aof_clone = Arc::clone(&aof);
-                
+
                 // Spawn a new thread for each client connection
                 thread::spawn(move || {
                     info!("New client connected");

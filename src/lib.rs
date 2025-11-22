@@ -1,7 +1,10 @@
-pub mod commands;
-pub mod config;
-pub mod db;
+// Core modules - old structure (will be refactored)
+pub mod aof;
+pub mod connection;
+pub mod database;
+pub mod error;
+pub mod interpreter;
 pub mod network;
 pub mod observability;
-pub mod persistence;
-pub mod server_info;
+pub mod parse_query;
+pub mod resp;

@@ -1,11 +1,11 @@
-use std::fs::{File, OpenOptions};
-use std::io::{self, BufReader, Write, Read};
-use std::path::Path;
-use std::sync::Arc;
-use parking_lot::Mutex;
-use tracing::{info, error};
 use crate::database::DB;
 use crate::resp::RespValue;
+use parking_lot::Mutex;
+use std::fs::{File, OpenOptions};
+use std::io::{self, BufReader, Read, Write};
+use std::path::Path;
+use std::sync::Arc;
+use tracing::{error, info};
 
 pub struct Aof {
     file: File,
@@ -18,19 +18,20 @@ impl Aof {
             .write(true)
             .append(true)
             .open(path)?;
-        
+
         Ok(Aof { file })
     }
 
     pub fn append(&mut self, command: Vec<String>) -> io::Result<()> {
         // Convert command to RESP format
-        let resp_args: Vec<RespValue> = command.into_iter()
+        let resp_args: Vec<RespValue> = command
+            .into_iter()
             .map(|s| RespValue::BulkString(Some(s)))
             .collect();
-        
+
         let resp = RespValue::Array(Some(resp_args));
         let serialized = resp.serialize();
-        
+
         self.file.write_all(serialized.as_bytes())?;
         self.file.flush()?; // Ensure it's written to disk
         Ok(())
@@ -44,36 +45,32 @@ impl Aof {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
         let mut buffer = Vec::new();
-        
-        // This is a simplified loader. 
-        // In a real implementation, we would use RespHandler to parse the stream properly.
-        // But since we write line-based RESP (mostly), we can try to parse it.
-        // Actually, using RespHandler is better.
-        
+
+        // Parse AOF file using RespHandler
+        // For very large files, consider implementing streaming parser
         // Let's read the whole file into memory for simplicity (not ideal for large AOF)
         reader.read_to_end(&mut buffer)?;
-        
+
         let mut current_pos = 0;
         let mut count = 0;
-        
+
         use crate::resp::RespHandler;
-        
+
         while current_pos < buffer.len() {
             match RespHandler::parse_request(&buffer[current_pos..]) {
                 Ok(Some((value, len))) => {
                     current_pos += len;
-                    
+
                     // Convert RESP value to arguments
                     let args = match value {
-                        RespValue::Array(Some(items)) => {
-                            items.into_iter().filter_map(|item| {
-                                match item {
-                                    RespValue::BulkString(Some(s)) => Some(s),
-                                    RespValue::SimpleString(s) => Some(s),
-                                    _ => None,
-                                }
-                            }).collect::<Vec<String>>()
-                        },
+                        RespValue::Array(Some(items)) => items
+                            .into_iter()
+                            .filter_map(|item| match item {
+                                RespValue::BulkString(Some(s)) => Some(s),
+                                RespValue::SimpleString(s) => Some(s),
+                                _ => None,
+                            })
+                            .collect::<Vec<String>>(),
                         _ => Vec::new(),
                     };
 
@@ -81,10 +78,10 @@ impl Aof {
                         // Replay command
                         // We need to create a temporary interpreter or just call DB methods directly.
                         // Calling DB methods directly is safer/faster for replay.
-                        
+
                         let cmd = args[0].to_uppercase();
                         let mut db_guard = db.lock();
-                        
+
                         if cmd == "SET" && args.len() >= 3 {
                             db_guard.set(args[1].clone(), args[2].clone());
                         } else if cmd == "DEL" && args.len() >= 2 {
@@ -113,15 +110,16 @@ impl Aof {
                                 let _ = db_guard.rpop(args[1].clone());
                             }
                         } else if cmd == "HSET" && args.len() >= 4 {
-                            let _ = db_guard.hset(args[1].clone(), args[2].clone(), args[3].clone());
+                            let _ =
+                                db_guard.hset(args[1].clone(), args[2].clone(), args[3].clone());
                         } else if cmd == "HDEL" && args.len() >= 3 {
                             let _ = db_guard.hdel(args[1].clone(), args[2].clone());
                         }
                         // Note: We don't replay read commands like GET, KEYS, etc.
-                        
+
                         count += 1;
                     }
-                },
+                }
                 Ok(None) => break, // Incomplete or end
                 Err(e) => {
                     error!("Error parsing AOF: {}", e);
@@ -129,7 +127,7 @@ impl Aof {
                 }
             }
         }
-        
+
         info!("Loaded {} commands from AOF", count);
         Ok(())
     }
