@@ -1,4 +1,10 @@
-pub mod parse_query;
-pub mod database;
-pub mod interpreter;
+// Core modules
+pub mod aof;
 pub mod connection;
+pub mod database;
+pub mod error;
+pub mod interpreter;
+pub mod network;
+pub mod observability;
+pub mod parse_query;
+pub mod resp;
